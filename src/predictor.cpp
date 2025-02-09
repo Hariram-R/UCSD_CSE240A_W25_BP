@@ -44,17 +44,19 @@ uint8_t *bht_gshare;
 uint64_t ghistory;
 
 // tournament
-uint8_t *tournament_bht_local;
-uint16_t *tournament_pht_local;
 
-uint8_t *tournament_bht_global;
-uint64_t tournament_ghr;
+
+const int tournament_ghr_width = 16;
+const int tournament_chooser_width = 16;
+const int tournament_local_pht_width = 10;
+
+uint16_t *tournament_bht_local;
+uint8_t *tournament_pht_local;
+
+uint8_t *tournament_pht_global;
+uint16_t tournament_ghr;
 
 uint8_t *tournament_pht_chooser;
-
-int tournament_ghr_width = 12;
-int tournament_local_width = 10;
-
 
 //------------------------------------//
 //        Predictor Functions         //
@@ -205,35 +207,47 @@ void cleanup_gshare()
 
 // tournament predictor functions
 void init_tournament(){
-  int pht_size = 1 << tournament_local_width;
-  tournament_bht_local = (uint8_t *)malloc(pht_size * sizeof(uint8_t));
-  tournament_pht_local = (uint16_t *)malloc(pht_size * sizeof(uint16_t));
   
-  tournament_ghr = 0;
+  //printf("local pht %d",pht_size);
+
+  int local_pht_size = 1 << tournament_local_pht_width;
 
   int global_pht_size = 1 << tournament_ghr_width;
-  tournament_bht_global = (uint8_t *)malloc(global_pht_size * sizeof(uint8_t));
 
-  // chooser also based on GHR
-  tournament_pht_chooser = (uint8_t *)malloc(global_pht_size * sizeof(uint8_t));
+  int chooser_size = 1 << tournament_chooser_width;
 
 
-  for (int i = 0; i < pht_size; i++) {
-    tournament_pht_local[i] = WN;  
+  tournament_bht_local = (uint16_t *)malloc(local_pht_size * sizeof(uint16_t));
+  tournament_pht_local = (uint8_t *)malloc(local_pht_size * sizeof(uint8_t));
+
+  tournament_ghr = 0;
+
+  tournament_pht_global = (uint8_t *)malloc(global_pht_size * sizeof(uint8_t));
+
+  // chooser based chooser width
+  tournament_pht_chooser = (uint8_t *)malloc(chooser_size * sizeof(uint8_t));
+
+
+  for (int i = 0; i < local_pht_size; i++) {
+    tournament_pht_local[i] = WN;
+    tournament_bht_local[i] = 0;  
   }
   for (int i = 0; i < global_pht_size; i++) {
-    tournament_bht_global[i] = WN; 
-    tournament_pht_chooser[i] = 0;  
-}
+    tournament_pht_global[i] = WN; 
+  }
+  for (int i = 0; i < chooser_size; i++) {
+    tournament_pht_chooser[i] = 2;  
+  }
+
 }
 
 uint8_t tournament_predict_local(uint32_t pc){
-  uint32_t bht_entries = 1 << tournament_local_width;
+  uint32_t bht_entries = 1 << tournament_local_pht_width;
   // Gets the last 10-bits of the PC
-  uint32_t local_bht_index = pc & (bht_entries - 1);
+  uint32_t local_bht_index = pc & ((1 << tournament_local_pht_width) - 1);
 
   uint16_t current_pattern = tournament_bht_local[local_bht_index];
-  uint32_t current_pattern_10bits = current_pattern & (bht_entries - 1);
+  uint16_t current_pattern_10bits = current_pattern & (bht_entries - 1);
 
   switch (tournament_pht_local[current_pattern_10bits])
   {
@@ -246,20 +260,21 @@ uint8_t tournament_predict_local(uint32_t pc){
   case ST:
     return TAKEN;
   default:
-    printf("Warning: Undefined state of entry in Tournament local PHT!\n");
+    printf("Warning: Undefined state of entry in Tournament local PHT! %d\n",tournament_pht_local[current_pattern_10bits]);
     return NOTTAKEN;
   }
+
 }
 
 uint8_t tournament_predict_global(uint32_t pc){
-  // Update history register
+  // Update history register - NOT NEEDED HERE
   //tournament_ghr = ((tournament_ghr << 1) | outcome);
   
   //Index global history with 12-b global pattern
-  int ghr_size = 1 << tournament_ghr_width;
-  uint32_t tournament_ghr_bht_index = tournament_ghr & (ghr_size - 1);
+  //int ghr_size = 1 << tournament_ghr_width;
+  uint32_t tournament_ghr_bht_index = tournament_ghr & ((1 << tournament_ghr_width) - 1);
 
-  switch(tournament_bht_global[tournament_ghr_bht_index]){
+  switch(tournament_pht_global[tournament_ghr_bht_index]){
     case WN:
       return NOTTAKEN;
     case SN:
@@ -272,6 +287,7 @@ uint8_t tournament_predict_global(uint32_t pc){
       printf("Warning: Undefined state of entry in Tournament Global HT!\n");
       return NOTTAKEN;
   }
+
 }
 
 uint8_t tournament_predict(uint32_t pc){
@@ -279,7 +295,7 @@ uint8_t tournament_predict(uint32_t pc){
   uint8_t local = tournament_predict_local(pc);
   uint8_t global = tournament_predict_global(pc);
 
-  int chooser_size = 1 << tournament_ghr_width;
+  int chooser_size = 1 << tournament_chooser_width;
   uint32_t tournament_chooser_index = tournament_ghr & (chooser_size - 1);
 
   /*
@@ -301,16 +317,17 @@ void train_tournament(int32_t pc, uint8_t outcome) {
   uint8_t local = tournament_predict_local(pc);
   uint8_t global = tournament_predict_global(pc);
   
-  int chooser_size = 1 << tournament_ghr_width;
+  int chooser_size = 1 << tournament_chooser_width;
   uint32_t tournament_chooser_index = tournament_ghr & (chooser_size - 1);
 
   if(local == outcome && global != outcome){
-    tournament_pht_chooser[tournament_chooser_index] += 1;
     // Wrap around for 2-bit sat counter
-    if(tournament_pht_chooser[tournament_chooser_index] > 3){
+    if(tournament_pht_chooser[tournament_chooser_index] >= 3){
       tournament_pht_chooser[tournament_chooser_index] = 3;
-    } 
-  } else if(local != outcome && global == outcome) {
+    } else {
+      tournament_pht_chooser[tournament_chooser_index] += 1;
+    }
+  } else if(global == outcome && local != outcome) {
     if(tournament_pht_chooser[tournament_chooser_index] == 0){
       tournament_pht_chooser[tournament_chooser_index] = 0;
     }  
@@ -319,15 +336,35 @@ void train_tournament(int32_t pc, uint8_t outcome) {
     }
   } 
 
+  /*if(tournament_pht_chooser[tournament_chooser_index] > 3){
+    //printf("invalid value %d\n",tournament_pht_chooser[tournament_chooser_index]);
+    tournament_pht_chooser[tournament_chooser_index] = 3;
+  }*/
+
+  /*uint8_t chosen_prediction;
+  if (tournament_pht_chooser[tournament_chooser_index] >= 2) {
+      chosen_prediction = local;
+  } else {
+      chosen_prediction = global;
+  }
+  // ***Correct Chooser Update Logic***
+  if (chosen_prediction == outcome) {  // If the *chosen* predictor was correct
+    if (local == outcome && global != outcome) {
+      tournament_pht_chooser[tournament_chooser_index] = std::min((uint8_t)3, tournament_pht_chooser[tournament_chooser_index] + 1);
+    }
+    } else {  // If the *chosen* predictor was incorrect
+      if (local != outcome && global == outcome) {
+          tournament_pht_chooser[tournament_chooser_index] = std::max((uint8_t)0, tournament_pht_chooser[tournament_chooser_index] - 1);
+      }
+    } */
+
   // get lower 10 bits of pc
-  uint32_t bht_entries = 1 << tournament_local_width;
+  uint32_t bht_entries = 1 << tournament_local_pht_width;
   uint32_t tournament_local_index = pc & (bht_entries - 1);
 
   // Update branch history table entry
-  tournament_bht_local[tournament_local_index] = ((tournament_bht_local[tournament_local_index] << 1) | outcome);
   uint16_t current_pattern = tournament_bht_local[tournament_local_index];
-  uint32_t current_pattern_10bits = current_pattern & (bht_entries - 1);
-
+  uint16_t current_pattern_10bits = current_pattern & 0x3FF;
 
   switch (tournament_pht_local[current_pattern_10bits])
   {
@@ -344,42 +381,41 @@ void train_tournament(int32_t pc, uint8_t outcome) {
     tournament_pht_local[current_pattern_10bits] = (outcome == TAKEN) ? ST : WT;
     break;
   default:
-    printf("Warning: Undefined state of entry in Tournament Local PHT!\n");
+    printf("Warning: Undefined state of entry in Tournament Local PHT! %d\n",tournament_pht_local[current_pattern_10bits]);
     break;
   }
 
-  // Update history register
-  tournament_ghr = ((tournament_ghr << 1) | outcome);
-  // Masking to correct width
-  tournament_ghr = (tournament_ghr) & ((1 << tournament_ghr_width) - 1);
-
-
-  uint32_t tournament_ghr_bht_index = tournament_ghr & ((1 << tournament_ghr_width) - 1);
+  uint32_t tournament_ghr_pht_index = tournament_ghr & ((1 << tournament_ghr_width) - 1);
 
   //Index global history with 12-b global pattern
-  switch(tournament_bht_global[tournament_ghr_bht_index]){
+  switch(tournament_pht_global[tournament_ghr_pht_index]){
     case WN:
-    tournament_bht_global[tournament_ghr_bht_index] = (outcome == TAKEN) ? WT : SN;
+    tournament_pht_global[tournament_ghr_pht_index] = (outcome == TAKEN) ? WT : SN;
     break;
   case SN:
-    tournament_bht_global[tournament_ghr_bht_index] = (outcome == TAKEN) ? WN : SN;
+    tournament_pht_global[tournament_ghr_pht_index] = (outcome == TAKEN) ? WN : SN;
     break;
   case WT:
-    tournament_bht_global[tournament_ghr_bht_index] = (outcome == TAKEN) ? ST : WN;
+    tournament_pht_global[tournament_ghr_pht_index] = (outcome == TAKEN) ? ST : WN;
     break;
   case ST:
-    tournament_bht_global[tournament_ghr_bht_index] = (outcome == TAKEN) ? ST : WT;
+    tournament_pht_global[tournament_ghr_pht_index] = (outcome == TAKEN) ? ST : WT;
     break;
   default:
     printf("Warning: Undefined state of entry in Tournament Global BHT!\n");
     break;
   }
 
- 
+  tournament_bht_local[tournament_local_index] = ((tournament_bht_local[tournament_local_index] << 1) | outcome);
+
+  // Update history register
+  tournament_ghr = ((tournament_ghr << 1) | outcome);
+  // Masking to correct width
+  tournament_ghr = (tournament_ghr) & ((1 << tournament_ghr_width) - 1);
 }
 
 void cleanup_tournament(){
-  free(tournament_bht_global);
+  free(tournament_pht_global);
   free(tournament_bht_local);
   free(tournament_pht_local);
   free(tournament_pht_chooser);
