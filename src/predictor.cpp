@@ -52,8 +52,8 @@ uint64_t tournament_ghr;
 
 uint8_t *tournament_pht_chooser;
 
-int tournament_ghr_width = 15;
-int tournament_local_width = 16;
+int tournament_ghr_width = 12;
+int tournament_local_width = 10;
 
 
 //------------------------------------//
@@ -203,7 +203,7 @@ void cleanup_gshare()
   free(bht_gshare);
 }
 
-// tournament predictor function
+// tournament predictor functions
 void init_tournament(){
   int pht_size = 1 << tournament_local_width;
   tournament_bht_local = (uint8_t *)malloc(pht_size * sizeof(uint8_t));
@@ -216,6 +216,15 @@ void init_tournament(){
 
   // chooser also based on GHR
   tournament_pht_chooser = (uint8_t *)malloc(global_pht_size * sizeof(uint8_t));
+
+
+  for (int i = 0; i < pht_size; i++) {
+    tournament_pht_local[i] = WN;  
+  }
+  for (int i = 0; i < global_pht_size; i++) {
+    tournament_bht_global[i] = WN; 
+    tournament_pht_chooser[i] = 0;  
+}
 }
 
 uint8_t tournament_predict_local(uint32_t pc){
@@ -302,10 +311,12 @@ void train_tournament(int32_t pc, uint8_t outcome) {
       tournament_pht_chooser[tournament_chooser_index] = 3;
     } 
   } else if(local != outcome && global == outcome) {
-    tournament_pht_chooser[tournament_chooser_index] -= 1;
-    if(tournament_pht_chooser[tournament_chooser_index] < 0){
+    if(tournament_pht_chooser[tournament_chooser_index] == 0){
       tournament_pht_chooser[tournament_chooser_index] = 0;
     }  
+    else {
+      tournament_pht_chooser[tournament_chooser_index] -= 1;
+    }
   } 
 
   // get lower 10 bits of pc
@@ -339,8 +350,11 @@ void train_tournament(int32_t pc, uint8_t outcome) {
 
   // Update history register
   tournament_ghr = ((tournament_ghr << 1) | outcome);
-  int ghr_size = 1 << tournament_ghr_width;
-  uint32_t tournament_ghr_bht_index = tournament_ghr & (ghr_size - 1);
+  // Masking to correct width
+  tournament_ghr = (tournament_ghr) & ((1 << tournament_ghr_width) - 1);
+
+
+  uint32_t tournament_ghr_bht_index = tournament_ghr & ((1 << tournament_ghr_width) - 1);
 
   //Index global history with 12-b global pattern
   switch(tournament_bht_global[tournament_ghr_bht_index]){
@@ -370,6 +384,8 @@ void cleanup_tournament(){
   free(tournament_pht_local);
   free(tournament_pht_chooser);
 }
+
+
 
 void init_predictor()
 {
