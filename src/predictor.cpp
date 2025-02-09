@@ -211,15 +211,16 @@ void init_tournament(){
   int global_pht_size = 1 << 12;
   tournament_bht_global = (uint8_t *)malloc(global_pht_size * sizeof(uint8_t));
 
+  // chooser also based on GHR
   tournament_pht_chooser = (uint8_t *)malloc(global_pht_size * sizeof(uint8_t));
 }
 
 uint8_t tournament_predict_local(uint32_t pc){
   uint32_t bht_entries = 1 << 10;
   // Gets the last 10-bits of the PC
-  uint32_t pc_lower_bits = pc & (bht_entries - 1);
+  uint32_t local_bht_index = pc & (bht_entries - 1);
 
-  uint16_t current_pattern = tournament_bht_local[pc_lower_bits];
+  uint16_t current_pattern = tournament_bht_local[local_bht_index];
   uint32_t current_pattern_10bits = current_pattern & (bht_entries - 1);
 
   switch (tournament_pht_local[current_pattern_10bits])
@@ -241,8 +242,12 @@ uint8_t tournament_predict_local(uint32_t pc){
 uint8_t tournament_predict_global(uint32_t pc){
   // Update history register
   //tournament_ghr = ((tournament_ghr << 1) | outcome);
+  
   //Index global history with 12-b global pattern
-  switch(tournament_bht_global[tournament_ghr]){
+  int ghr_size = 1 << 12;
+  uint32_t tournament_ghr_bht_index = tournament_ghr & (ghr_size - 1);
+
+  switch(tournament_bht_global[tournament_ghr_bht_index]){
     case WN:
       return NOTTAKEN;
     case SN:
@@ -265,6 +270,13 @@ uint8_t tournament_predict(uint32_t pc){
   int chooser_size = 1 << 12;
   uint32_t tournament_chooser_index = tournament_ghr & (chooser_size - 1);
 
+  /*
+  Chooser 2b counter:
+    0: global
+    1: global
+    2: local
+    3: local
+  */
   if(tournament_pht_chooser[tournament_chooser_index] >= 2) {
     return local;
   } else {
@@ -291,7 +303,7 @@ void train_tournament(int32_t pc, uint8_t outcome) {
     if(tournament_pht_chooser[tournament_chooser_index] < 0){
       tournament_pht_chooser[tournament_chooser_index] = 0;
     }  
-  }
+  } 
 
   // get lower 10 bits of pc
   uint32_t bht_entries = 1 << 10;
@@ -324,20 +336,22 @@ void train_tournament(int32_t pc, uint8_t outcome) {
 
   // Update history register
   tournament_ghr = ((tournament_ghr << 1) | outcome);
+  int ghr_size = 1 << 12;
+  uint32_t tournament_ghr_bht_index = tournament_ghr & (ghr_size - 1);
 
   //Index global history with 12-b global pattern
-  switch(tournament_bht_global[tournament_ghr]){
+  switch(tournament_bht_global[tournament_ghr_bht_index]){
     case WN:
-    tournament_bht_global[tournament_ghr] = (outcome == TAKEN) ? WT : SN;
+    tournament_bht_global[tournament_ghr_bht_index] = (outcome == TAKEN) ? WT : SN;
     break;
   case SN:
-    tournament_bht_global[tournament_ghr] = (outcome == TAKEN) ? WN : SN;
+    tournament_bht_global[tournament_ghr_bht_index] = (outcome == TAKEN) ? WN : SN;
     break;
   case WT:
-    tournament_bht_global[tournament_ghr] = (outcome == TAKEN) ? ST : WN;
+    tournament_bht_global[tournament_ghr_bht_index] = (outcome == TAKEN) ? ST : WN;
     break;
   case ST:
-    tournament_bht_global[tournament_ghr] = (outcome == TAKEN) ? ST : WT;
+    tournament_bht_global[tournament_ghr_bht_index] = (outcome == TAKEN) ? ST : WT;
     break;
   default:
     printf("Warning: Undefined state of entry in Tournament Global BHT!\n");
@@ -364,6 +378,7 @@ void init_predictor()
     init_gshare();
     break;
   case TOURNAMENT:
+    init_tournament();
     break;
   case CUSTOM:
     init_bimodal();
@@ -388,7 +403,7 @@ uint32_t make_prediction(uint32_t pc, uint32_t target, uint32_t direct)
   case GSHARE:
     return gshare_predict(pc);
   case TOURNAMENT:
-    return NOTTAKEN;
+    return tournament_predict(pc);
   case CUSTOM:
     return bimodal_predict(pc);
   default:
@@ -415,7 +430,7 @@ void train_predictor(uint32_t pc, uint32_t target, uint32_t outcome, uint32_t co
     case GSHARE:
       return train_gshare(pc, outcome);
     case TOURNAMENT:
-      return;
+      return train_tournament(pc,outcome);
     case CUSTOM:
       return train_bimodal(pc,outcome);
     default:

@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "chrono": "cpp",
+        "variant": "cpp",
+        "*.ph": "cpp",
+        "cstdint": "cpp"
+    }
+}
