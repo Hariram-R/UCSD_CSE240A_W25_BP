@@ -52,6 +52,8 @@ uint64_t tournament_ghr;
 
 uint8_t *tournament_pht_chooser;
 
+int tournament_ghr_width = 15;
+int tournament_local_width = 16;
 
 
 //------------------------------------//
@@ -203,12 +205,13 @@ void cleanup_gshare()
 
 // tournament predictor function
 void init_tournament(){
-  int pht_size = 1 << 10;
+  int pht_size = 1 << tournament_local_width;
   tournament_bht_local = (uint8_t *)malloc(pht_size * sizeof(uint8_t));
   tournament_pht_local = (uint16_t *)malloc(pht_size * sizeof(uint16_t));
+  
   tournament_ghr = 0;
 
-  int global_pht_size = 1 << 12;
+  int global_pht_size = 1 << tournament_ghr_width;
   tournament_bht_global = (uint8_t *)malloc(global_pht_size * sizeof(uint8_t));
 
   // chooser also based on GHR
@@ -216,7 +219,7 @@ void init_tournament(){
 }
 
 uint8_t tournament_predict_local(uint32_t pc){
-  uint32_t bht_entries = 1 << 10;
+  uint32_t bht_entries = 1 << tournament_local_width;
   // Gets the last 10-bits of the PC
   uint32_t local_bht_index = pc & (bht_entries - 1);
 
@@ -244,7 +247,7 @@ uint8_t tournament_predict_global(uint32_t pc){
   //tournament_ghr = ((tournament_ghr << 1) | outcome);
   
   //Index global history with 12-b global pattern
-  int ghr_size = 1 << 12;
+  int ghr_size = 1 << tournament_ghr_width;
   uint32_t tournament_ghr_bht_index = tournament_ghr & (ghr_size - 1);
 
   switch(tournament_bht_global[tournament_ghr_bht_index]){
@@ -267,7 +270,7 @@ uint8_t tournament_predict(uint32_t pc){
   uint8_t local = tournament_predict_local(pc);
   uint8_t global = tournament_predict_global(pc);
 
-  int chooser_size = 1 << 12;
+  int chooser_size = 1 << tournament_ghr_width;
   uint32_t tournament_chooser_index = tournament_ghr & (chooser_size - 1);
 
   /*
@@ -289,7 +292,7 @@ void train_tournament(int32_t pc, uint8_t outcome) {
   uint8_t local = tournament_predict_local(pc);
   uint8_t global = tournament_predict_global(pc);
   
-  int chooser_size = 1 << 12;
+  int chooser_size = 1 << tournament_ghr_width;
   uint32_t tournament_chooser_index = tournament_ghr & (chooser_size - 1);
 
   if(local == outcome && global != outcome){
@@ -306,7 +309,7 @@ void train_tournament(int32_t pc, uint8_t outcome) {
   } 
 
   // get lower 10 bits of pc
-  uint32_t bht_entries = 1 << 10;
+  uint32_t bht_entries = 1 << tournament_local_width;
   uint32_t tournament_local_index = pc & (bht_entries - 1);
 
   // Update branch history table entry
@@ -336,7 +339,7 @@ void train_tournament(int32_t pc, uint8_t outcome) {
 
   // Update history register
   tournament_ghr = ((tournament_ghr << 1) | outcome);
-  int ghr_size = 1 << 12;
+  int ghr_size = 1 << tournament_ghr_width;
   uint32_t tournament_ghr_bht_index = tournament_ghr & (ghr_size - 1);
 
   //Index global history with 12-b global pattern
