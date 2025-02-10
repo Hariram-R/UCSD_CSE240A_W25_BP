@@ -45,7 +45,6 @@ uint64_t ghistory;
 
 // tournament
 
-
 const int tournament_ghr_width = 16;
 const int tournament_chooser_width = 16;
 const int tournament_local_pht_width = 10;
@@ -57,6 +56,16 @@ uint8_t *tournament_pht_global;
 uint16_t tournament_ghr;
 
 uint8_t *tournament_pht_chooser;
+
+// perceptron
+// 12-b perceptrons
+// 2^16 perceptrons in total
+const int perceptron_ghr_width = 12;
+const int perceptron_table_size = 16;
+
+int perceptron_table[1 << perceptron_table_size][perceptron_ghr_width];
+int perceptron_ghr[perceptron_ghr_width];
+
 
 //------------------------------------//
 //        Predictor Functions         //
@@ -421,7 +430,98 @@ void cleanup_tournament(){
   free(tournament_pht_chooser);
 }
 
+void init_perceptron(){
+  int perceptron_table_entries = 1 << perceptron_table_size;
 
+  for (int i = 0; i < perceptron_table_entries; i++) {
+    perceptron_table[i][0] = 1; // All bias = 1 initially
+    for (int j = 1; j < perceptron_ghr_width; j++){
+      perceptron_table[i][j] = 0;
+    }
+  }
+
+  perceptron_ghr[0] = 1; // Always 1
+  for (int j = 1; j < perceptron_ghr_width; j++){
+    perceptron_ghr[j] = 0;
+  }
+  
+}
+
+u_int8_t perceptron_predict(uint32_t pc){
+  uint32_t perceptron_entries = 1 << perceptron_table_size;
+  
+  // Gets the last 16-bits of the PC
+  uint32_t perceptron_table_index = pc & (perceptron_entries - 1);
+
+  int current_perc[perceptron_ghr_width];
+
+  for(int i = 0;i<perceptron_ghr_width;i++){
+    current_perc[i] = perceptron_table[perceptron_table_index][i];
+  }
+
+  int dot_product = 0;
+
+  for(int i =0;i<perceptron_ghr_width;i++){
+    dot_product += current_perc[i] * perceptron_ghr[i];
+  }
+  return dot_product > 0 ? TAKEN:NOTTAKEN;
+}
+
+void train_perceptron(int32_t pc, uint8_t outcome){
+  uint32_t perceptron_entries = 1 << perceptron_table_size; // 2^16
+  
+  // Gets the last 16-bits of the PC
+  uint32_t perceptron_table_index = pc & (perceptron_entries - 1);
+
+  int current_perc[perceptron_ghr_width];
+  for(int i = 0;i<perceptron_ghr_width;i++){
+    current_perc[i] = perceptron_table[perceptron_table_index][i];
+  }
+
+  int dot_product = 0;
+
+  for(int i =0;i<perceptron_ghr_width;i++){
+    dot_product += current_perc[i] * perceptron_ghr[i];
+    //printf("dont prod %d\n",dot_product);
+  }
+
+  int result = dot_product > 0 ? 1:-1;
+  int result_T_NT = dot_product > 0 ? TAKEN:NOTTAKEN; // only to compare with outcome
+
+  int t = (outcome == TAKEN) ? 1:-1;
+
+
+  if(result_T_NT != outcome || abs(dot_product) <= 35 ){
+
+      int bias = current_perc[0];
+      int new_bias = bias + t;
+      perceptron_table[perceptron_table_index][0] = new_bias;
+
+
+      for(int i =1;i<perceptron_ghr_width;i++){
+        int weight = current_perc[i];
+        int new_weight = weight + t * perceptron_ghr[i];
+         
+        //Update weight back into actual perceptron table
+        perceptron_table[perceptron_table_index][i] = new_weight;
+      }
+  }
+
+  // Update GHR
+  // perceptron_ghr[0] is alwyas 1
+  for(int i=perceptron_ghr_width-1;i>1;i--){
+    perceptron_ghr[i] = perceptron_ghr[i-1];
+    //printf("%d",perceptron_ghr[i]);
+  }
+  perceptron_ghr[1] = (outcome == TAKEN) ? 1 : -1;
+  //printf("%d",perceptron_ghr[1]);
+  //printf("%d",perceptron_ghr[0]);
+  //printf("\n");
+
+}
+
+void cleanup_perceptron(){
+}
 
 void init_predictor()
 {
@@ -436,7 +536,8 @@ void init_predictor()
     init_tournament();
     break;
   case CUSTOM:
-    init_bimodal();
+    //init_bimodal();
+    init_perceptron();
     break;
   default:
     break;
@@ -460,7 +561,8 @@ uint32_t make_prediction(uint32_t pc, uint32_t target, uint32_t direct)
   case TOURNAMENT:
     return tournament_predict(pc);
   case CUSTOM:
-    return bimodal_predict(pc);
+    //return bimodal_predict(pc);
+    return perceptron_predict(pc);
   default:
     break;
   }
@@ -487,7 +589,8 @@ void train_predictor(uint32_t pc, uint32_t target, uint32_t outcome, uint32_t co
     case TOURNAMENT:
       return train_tournament(pc,outcome);
     case CUSTOM:
-      return train_bimodal(pc,outcome);
+      //return train_bimodal(pc,outcome);
+      return train_perceptron(pc,outcome);
     default:
       break;
     }
