@@ -58,10 +58,10 @@ uint16_t tournament_ghr;
 uint8_t *tournament_pht_chooser;
 
 // perceptron
-// 12-b perceptrons
+// 16-b perceptrons
 // 2^16 perceptrons in total
-const int perceptron_ghr_width = 12;
-const int perceptron_weight_bias_width = 13;
+const int perceptron_ghr_width = 16;
+const int perceptron_weight_bias_width = 17;
 
 const int perceptron_table_size = 16;
 
@@ -788,8 +788,8 @@ void init_predictor()
     break;
   case CUSTOM:
     //init_bimodal();
-    //init_perceptron();
-    init_plt();
+    init_perceptron();
+    //init_plt();
     break;
   default:
     break;
@@ -814,8 +814,8 @@ uint32_t make_prediction(uint32_t pc, uint32_t target, uint32_t direct)
     return tournament_predict(pc);
   case CUSTOM:
     //return bimodal_predict(pc);
-    //return perceptron_predict(pc);
-    return plt_predict(pc);
+    return perceptron_predict(pc);
+    //return plt_predict(pc);
   default:
     break;
   }
@@ -843,8 +843,8 @@ void train_predictor(uint32_t pc, uint32_t target, uint32_t outcome, uint32_t co
       return train_tournament(pc,outcome);
     case CUSTOM:
       //return train_bimodal(pc,outcome);
-      //return train_perceptron(pc,outcome);
-      return train_plt(pc,outcome);
+      return train_perceptron(pc,outcome);
+      //return train_plt(pc,outcome);
     default:
       break;
     }
