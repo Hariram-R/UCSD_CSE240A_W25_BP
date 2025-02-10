@@ -61,15 +61,20 @@ uint8_t *tournament_pht_chooser;
 // 12-b perceptrons
 // 2^16 perceptrons in total
 const int perceptron_ghr_width = 12;
+const int perceptron_weight_bias_width = 13;
+
 const int perceptron_table_size = 16;
 
-int perceptron_table[1 << perceptron_table_size][perceptron_ghr_width];
+int perceptron_table[1 << perceptron_table_size][perceptron_weight_bias_width];
 int perceptron_ghr[perceptron_ghr_width];
 
 // tournament - perceptron x local PHT Predictor - PLT
 const int plt_chooser_width = 12;
 const int plt_local_pht_width = 10;
-const int plt_ghr_width = 12;
+
+const int plt_ghr_width = 16;
+const int plt_weight_bias_width = 17;
+
 const int plt_perceptron_table_size = 16;
 
 int plt_perceptron_table[1 << perceptron_table_size][perceptron_ghr_width];
@@ -229,7 +234,8 @@ void cleanup_gshare()
   free(bht_gshare);
 }
 
-// tournament predictor functions
+// tournament predictor functions ----------------------------------------------
+
 void init_tournament(){
   
   //printf("local pht %d",pht_size);
@@ -445,20 +451,20 @@ void cleanup_tournament(){
   free(tournament_pht_chooser);
 }
 
-// perceptron functions 
+// perceptron functions ----------------------------------------------
 
 void init_perceptron(){
   int perceptron_table_entries = 1 << perceptron_table_size;
 
   for (int i = 0; i < perceptron_table_entries; i++) {
     perceptron_table[i][0] = 1; // All bias = 1 initially
-    for (int j = 1; j < perceptron_ghr_width; j++){
+    for (int j = 1; j < perceptron_weight_bias_width; j++){
       perceptron_table[i][j] = 0;
     }
   }
 
-  perceptron_ghr[0] = 1; // Always 1
-  for (int j = 1; j < perceptron_ghr_width; j++){
+  //perceptron_ghr[0] = 1; // Always 1
+  for (int j = 0; j < perceptron_ghr_width; j++){
     perceptron_ghr[j] = 0;
   }
   
@@ -470,16 +476,19 @@ uint8_t perceptron_predict(uint32_t pc){
   // Gets the last 16-bits of the PC
   uint32_t perceptron_table_index = pc & (perceptron_entries - 1);
 
-  int current_perc[perceptron_ghr_width];
-
-  for(int i = 0;i<perceptron_ghr_width;i++){
+  int current_perc[perceptron_weight_bias_width];
+  for(int i = 0;i<perceptron_weight_bias_width;i++){
     current_perc[i] = perceptron_table[perceptron_table_index][i];
   }
 
   int dot_product = 0;
 
-  for(int i =0;i<perceptron_ghr_width;i++){
-    dot_product += current_perc[i] * perceptron_ghr[i];
+  for(int i =0;i<perceptron_weight_bias_width;i++){
+    if(i==0){
+      dot_product += current_perc[i]; // Only bias
+    } else{
+      dot_product += current_perc[i] * perceptron_ghr[i-1];
+    }
   }
   return dot_product > 0 ? TAKEN:NOTTAKEN;
 }
@@ -490,16 +499,19 @@ void train_perceptron(int32_t pc, uint8_t outcome){
   // Gets the last 16-bits of the PC
   uint32_t perceptron_table_index = pc & (perceptron_entries - 1);
 
-  int current_perc[perceptron_ghr_width];
-  for(int i = 0;i<perceptron_ghr_width;i++){
+  int current_perc[perceptron_weight_bias_width];
+  for(int i = 0;i<perceptron_weight_bias_width;i++){
     current_perc[i] = perceptron_table[perceptron_table_index][i];
   }
 
   int dot_product = 0;
 
-  for(int i =0;i<perceptron_ghr_width;i++){
-    dot_product += current_perc[i] * perceptron_ghr[i];
-    //printf("dont prod %d\n",dot_product);
+  for(int i =0;i<perceptron_weight_bias_width;i++){
+    if(i==0){
+      dot_product += current_perc[i]; // Only bias
+    } else{
+      dot_product += current_perc[i] * perceptron_ghr[i-1];
+    }
   }
 
   int result = dot_product > 0 ? 1:-1;
@@ -515,9 +527,9 @@ void train_perceptron(int32_t pc, uint8_t outcome){
       perceptron_table[perceptron_table_index][0] = new_bias;
 
 
-      for(int i =1;i<perceptron_ghr_width;i++){
+      for(int i =1;i<perceptron_weight_bias_width;i++){
         int weight = current_perc[i];
-        int new_weight = weight + t * perceptron_ghr[i];
+        int new_weight = weight + t * perceptron_ghr[i-1];
          
         //Update weight back into actual perceptron table
         perceptron_table[perceptron_table_index][i] = new_weight;
@@ -526,12 +538,11 @@ void train_perceptron(int32_t pc, uint8_t outcome){
 
   // Update GHR
   // perceptron_ghr[0] is alwyas 1
-  for(int i=perceptron_ghr_width-1;i>1;i--){
+  for(int i=perceptron_ghr_width-1;i>0;i--){
     perceptron_ghr[i] = perceptron_ghr[i-1];
     //printf("%d",perceptron_ghr[i]);
   }
-  perceptron_ghr[1] = (outcome == TAKEN) ? 1 : -1;
-  //printf("%d",perceptron_ghr[1]);
+  perceptron_ghr[0] = (outcome == TAKEN) ? 1 : -1;
   //printf("%d",perceptron_ghr[0]);
   //printf("\n");
 
@@ -540,14 +551,14 @@ void train_perceptron(int32_t pc, uint8_t outcome){
 void cleanup_perceptron(){
 }
 
-// PLT predictor functions
+// PLT predictor functions -------------------------------------------
 
 void init_plt(){
   int perceptron_table_entries = 1 << plt_perceptron_table_size;
 
   for (int i = 0; i < perceptron_table_entries; i++) {
     plt_perceptron_table[i][0] = 1; // All bias = 1 initially
-    for (int j = 1; j < plt_ghr_width; j++){
+    for (int j = 1; j < plt_weight_bias_width; j++){
       plt_perceptron_table[i][j] = 0;
     }
   }
@@ -604,16 +615,20 @@ uint8_t plt_perceptron_predict(uint32_t pc){
   // Gets the last 16-bits of the PC
   uint32_t perceptron_table_index = pc & (perceptron_entries - 1);
 
-  int current_perc[plt_ghr_width];
+  int current_perc[plt_weight_bias_width];
 
-  for(int i = 0;i<plt_ghr_width;i++){
+  for(int i = 0;i<plt_weight_bias_width;i++){
     current_perc[i] = plt_perceptron_table[perceptron_table_index][i];
   }
 
   int dot_product = 0;
 
-  for(int i =0;i<plt_ghr_width;i++){
-    dot_product += current_perc[i] * plt_perceptron_ghr[i];
+  for(int i =0;i<plt_weight_bias_width;i++){
+    if(i==0){
+      dot_product += current_perc[i]; // Only bias
+    } else{
+      dot_product += current_perc[i] * plt_perceptron_ghr[i-1];
+    }
   }
   return dot_product > 0 ? TAKEN:NOTTAKEN;
 }
@@ -707,15 +722,19 @@ void train_plt(int32_t pc, uint8_t outcome) {
   uint32_t perceptron_table_index = pc & (perceptron_entries - 1);
 
   // Extracting perceptron corresponding to PC
-  int current_perc[plt_ghr_width];
-  for(int i = 0;i<plt_ghr_width;i++){
+  int current_perc[plt_weight_bias_width];
+  for(int i = 0;i<plt_weight_bias_width;i++){
     current_perc[i] = plt_perceptron_table[perceptron_table_index][i];
   }
 
   // Calculating dot product
   int dot_product = 0;
-  for(int i =0;i<plt_ghr_width;i++){
-    dot_product += current_perc[i] * plt_perceptron_ghr[i];
+  for(int i =0;i<plt_weight_bias_width;i++){
+    if(i==0){
+      dot_product += current_perc[i]; // Only bias
+    } else{
+      dot_product += current_perc[i] * plt_perceptron_ghr[i-1];
+    }
   }
 
   int result = dot_product > 0 ? 1:-1;
@@ -723,16 +742,16 @@ void train_plt(int32_t pc, uint8_t outcome) {
   int t = (outcome == TAKEN) ? 1:-1; // sstores correct outcome for weight updating
 
   // Updating weight and bias
-  if(result_T_NT != outcome || abs(dot_product) <= 35 ){
+  if(result_T_NT != outcome || abs(dot_product) <= 37 ){
 
       int bias = current_perc[0];
       int new_bias = bias + t;
       plt_perceptron_table[perceptron_table_index][0] = new_bias;
 
 
-      for(int i =1;i<plt_ghr_width;i++){
+      for(int i =1;i<plt_weight_bias_width;i++){
         int weight = current_perc[i];
-        int new_weight = weight + t * plt_perceptron_ghr[i];
+        int new_weight = weight + t * plt_perceptron_ghr[i-1];
          
         //Update weight back into actual perceptron table
         plt_perceptron_table[perceptron_table_index][i] = new_weight;
@@ -741,10 +760,10 @@ void train_plt(int32_t pc, uint8_t outcome) {
 
   // Update GHR
   // perceptron_ghr[0] is alwyas 1
-  for(int i=plt_ghr_width-1;i>1;i--){
+  for(int i=plt_ghr_width-1;i>0;i--){
     plt_perceptron_ghr[i] = plt_perceptron_ghr[i-1];
   }
-  plt_perceptron_ghr[1] = (outcome == TAKEN) ? 1 : -1;
+  plt_perceptron_ghr[0] = (outcome == TAKEN) ? 1 : -1;
 
   // Update chooser GHR 
   plt_chooser_ghr = ((plt_chooser_ghr << 1) | outcome);
