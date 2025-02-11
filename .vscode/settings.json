@@ -3,7 +3,6 @@
         "chrono": "cpp",
         "variant": "cpp",
         "*.ph": "cpp",
-        "cstdint": "cpp",
-        "__locale": "cpp"
+        "cstdint": "cpp"
     }
 }
