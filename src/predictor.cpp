@@ -69,16 +69,16 @@ int perceptron_table[1 << perceptron_table_size][perceptron_weight_bias_width];
 int perceptron_ghr[perceptron_ghr_width];
 
 // tournament - perceptron x local PHT Predictor - PLT
-const int plt_chooser_width = 12;
-const int plt_local_pht_width = 10;
+const int plt_chooser_width = 16;
+const int plt_local_pht_width = 12;
 
-const int plt_ghr_width = 16;
-const int plt_weight_bias_width = 17;
+const int plt_ghr_width = 27;
+const int plt_weight_bias_width = 28;
 
 const int plt_perceptron_table_size = 12;
 
-int plt_perceptron_table[1 << perceptron_table_size][perceptron_ghr_width];
-int plt_perceptron_ghr[perceptron_ghr_width];
+int plt_perceptron_table[1 << plt_perceptron_table_size][plt_ghr_width];
+int plt_perceptron_ghr[plt_ghr_width];
 
 uint16_t plt_bht_local[1 << plt_local_pht_width];
 uint8_t plt_pht_local[1 << plt_local_pht_width];
@@ -585,7 +585,7 @@ void init_plt(){
 
 uint8_t plt_local_predict(uint32_t pc){
   uint32_t bht_entries = 1 << plt_local_pht_width;
-  // Gets the last 10-bits of the PC
+  // Gets the last 12-bits of the PC
   uint32_t local_bht_index = pc & ((1 << plt_local_pht_width) - 1);
 
   // Get pattern from BHT
@@ -674,7 +674,7 @@ void train_plt(int32_t pc, uint8_t outcome) {
       plt_pht_chooser[plt_chooser_index] += 1;
     }
   } else if(perceptron == outcome && local != outcome) {
-    if(plt_pht_chooser[plt_chooser_index] == 0){
+    if(plt_pht_chooser[plt_chooser_index] <= 0){
       plt_pht_chooser[plt_chooser_index] = 0;
     }  
     else {
@@ -691,7 +691,7 @@ void train_plt(int32_t pc, uint8_t outcome) {
 
   // Extract pattern from BHT
   uint16_t current_pattern = plt_bht_local[plt_local_index];
-  uint16_t current_pattern_10bits = current_pattern & 0x3FF;
+  uint16_t current_pattern_10bits = current_pattern & ((1 << plt_local_pht_width) - 1);
 
   // Update state in PHT
   switch (plt_pht_local[current_pattern_10bits])
@@ -788,8 +788,8 @@ void init_predictor()
     break;
   case CUSTOM:
     //init_bimodal();
-    init_perceptron();
-    //init_plt();
+    //init_perceptron();
+    init_plt();
     break;
   default:
     break;
@@ -814,8 +814,8 @@ uint32_t make_prediction(uint32_t pc, uint32_t target, uint32_t direct)
     return tournament_predict(pc);
   case CUSTOM:
     //return bimodal_predict(pc);
-    return perceptron_predict(pc);
-    //return plt_predict(pc);
+    //return perceptron_predict(pc);
+    return plt_predict(pc);
   default:
     break;
   }
@@ -843,8 +843,8 @@ void train_predictor(uint32_t pc, uint32_t target, uint32_t outcome, uint32_t co
       return train_tournament(pc,outcome);
     case CUSTOM:
       //return train_bimodal(pc,outcome);
-      return train_perceptron(pc,outcome);
-      //return train_plt(pc,outcome);
+      //return train_perceptron(pc,outcome);
+      return train_plt(pc,outcome);
     default:
       break;
     }
