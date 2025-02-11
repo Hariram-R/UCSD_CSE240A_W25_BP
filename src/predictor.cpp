@@ -69,13 +69,13 @@ int perceptron_table[1 << perceptron_table_size][perceptron_weight_bias_width];
 int perceptron_ghr[perceptron_ghr_width];
 
 // tournament - perceptron x local PHT Predictor - PLT
-const int plt_chooser_width = 16;
+const int plt_chooser_width = 15;
 const int plt_local_pht_width = 12;
 
 const int plt_ghr_width = 27;
 const int plt_weight_bias_width = 28;
 
-const int plt_perceptron_table_size = 12;
+const int plt_perceptron_table_size = 10;
 
 int plt_perceptron_table[1 << plt_perceptron_table_size][plt_ghr_width];
 int plt_perceptron_ghr[plt_ghr_width];
