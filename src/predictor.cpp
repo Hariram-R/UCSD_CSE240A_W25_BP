@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <math.h>
 #include "predictor.h"
+#pragma GCC diagnostic ignored "-Waggressive-loop-optimizations"
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
 
 //
 // TODO:Student Information
