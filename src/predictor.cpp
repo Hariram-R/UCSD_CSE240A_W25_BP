@@ -60,8 +60,8 @@ uint8_t *tournament_pht_chooser;
 // perceptron
 // 17-b perceptrons
 // 2^16 perceptrons in total
-const int perceptron_ghr_width = 31;
-const int perceptron_weight_bias_width = 32;
+const int perceptron_ghr_width = 63;
+const int perceptron_weight_bias_width = 64;
 
 const int perceptron_table_size = 12;
 
