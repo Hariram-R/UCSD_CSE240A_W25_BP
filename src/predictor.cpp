@@ -8,8 +8,7 @@
 #include <stdio.h>
 #include <math.h>
 #include "predictor.h"
-#pragma GCC diagnostic ignored "-Waggressive-loop-optimizations"
-#pragma GCC diagnostic ignored "-Wstringop-overflow"
+
 
 //
 // TODO:Student Information
@@ -79,7 +78,7 @@ const int plt_weight_bias_width = 28;
 
 const int plt_perceptron_table_size = 10;
 
-int plt_perceptron_table[1 << plt_perceptron_table_size][plt_ghr_width];
+int plt_perceptron_table[1 << plt_perceptron_table_size][plt_weight_bias_width];
 int plt_perceptron_ghr[plt_ghr_width];
 
 uint16_t plt_bht_local[1 << plt_local_pht_width];
@@ -566,7 +565,7 @@ void init_plt(){
   }
 
   plt_perceptron_ghr[0] = 1; // Always 1
-  for (int j = 1; j < perceptron_ghr_width; j++){
+  for (int j = 1; j < plt_ghr_width; j++){
     plt_perceptron_ghr[j] = 0;
   }
   plt_chooser_ghr = 0;
