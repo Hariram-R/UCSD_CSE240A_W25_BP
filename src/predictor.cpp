@@ -70,13 +70,13 @@ int perceptron_table[1 << perceptron_table_size][perceptron_weight_bias_width];
 int perceptron_ghr[perceptron_ghr_width];
 
 // tournament - perceptron x local PHT Predictor - PLT
-const int plt_chooser_width = 15;
+const int plt_chooser_width = 16;
 const int plt_local_pht_width = 12;
 
-const int plt_ghr_width = 27;
-const int plt_weight_bias_width = 28;
+const int plt_ghr_width = 35;
+const int plt_weight_bias_width = 36; // 35 weights + 1 bias
 
-const int plt_perceptron_table_size = 10;
+const int plt_perceptron_table_size = 11;
 
 int plt_perceptron_table[1 << plt_perceptron_table_size][plt_weight_bias_width];
 int plt_perceptron_ghr[plt_ghr_width];
@@ -85,7 +85,7 @@ uint16_t plt_bht_local[1 << plt_local_pht_width];
 uint8_t plt_pht_local[1 << plt_local_pht_width];
 
 uint8_t plt_pht_chooser[1 << plt_chooser_width];
-uint16_t plt_chooser_ghr;
+uint64_t plt_chooser_ghr;
 
 
 //------------------------------------//
@@ -768,7 +768,7 @@ void train_plt(int32_t pc, uint8_t outcome) {
 
   // Update chooser GHR 
   plt_chooser_ghr = ((plt_chooser_ghr << 1) | outcome);
-  plt_chooser_ghr = (plt_chooser_ghr) & ((1 << plt_ghr_width) - 1);
+  plt_chooser_ghr = (plt_chooser_ghr) & ((1UL << plt_ghr_width) - 1);
 
   plt_bht_local[plt_local_index] = ((plt_bht_local[plt_local_index] << 1) | outcome);
 
